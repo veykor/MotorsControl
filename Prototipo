@@ -1,0 +1,155 @@
+#include <AutoPID.h>
+#include <TimerOne.h>
+
+long int counter = 0;
+
+double wmotor = 0;
+
+long int tiempo = 0;
+
+bool unavez[] = {false,false,false,false,false,false};
+int val = 0;
+bool mostrar = false;
+bool Refresh = false;
+
+
+class motorControl
+{
+  public:
+    motorControl(int timebase);
+
+    void begin(int pinTurnClock, int pinTurnAnticlock,int pinEnable,int EncoderInterruptPin,int EncoderTickPerTurn,double Kp,double Kt,double Kd);
+    void setVelocity(int vel); 
+    int getIntPin();
+    
+
+  private:
+    int IntPin;
+    int pTC,pTAc,pE;
+    double RadPerPulseAndSecond;
+    int TimeBasems;
+    AutoPID *motorPid;
+    double SetPointPid;
+    double FeedbackPid;
+    double OutputPid;
+     
+  void definePin();
+  void defineInt();
+  
+  
+  int sat(int LimSup,int LimInf,int Value);
+};
+
+motorControl::motorControl(int timebase)
+{
+  this->TimeBasems = timebase;
+}
+
+void motorControl::definePin()
+{
+  pinMode(pTC,OUTPUT);
+  pinMode(pTAc,OUTPUT);
+  pinMode(pE,OUTPUT);
+}
+
+
+void motorControl::begin(int pinTurnClock, int pinTurnAnticlock,int pinEnable,int EncoderInterruptPin,int EncoderTickPerTurn,double Kp,double Ki,double Kd)
+{
+  this->pTC = pinTurnClock;
+  this->pTAc = pinTurnAnticlock;
+  this->pE = pinEnable;
+  this->IntPin = digitalPinToInterrupt(EncoderInterruptPin);
+  
+  RadPerPulseAndSecond = ((2.0*PI)/(double)EncoderTickPerTurn)*(1000.0/(double)TimeBasems);
+
+    motorPid = new AutoPID(&this->FeedbackPid,&this->SetPointPid,&this->OutputPid,0.0,255.0,Kp,Ki,Kd);
+    motorPid[0].setTimeStep(TimeBasems);
+  
+  definePin();
+  defineInt();
+}
+
+int motorControl::getIntPin()
+{
+  return IntPin;
+}
+
+void motorControl::setVelocity(int vel)
+{
+
+  
+    
+}
+
+
+class motorsControl
+{
+  public:
+  motorControl *motor;
+  bool *Refresh;
+
+  void begin(uint8_t nMotors,int TimeBasems);
+  
+  private:
+  void defineInt();
+  uint8_t nMotors;
+  int TimeBasems;
+  
+};
+
+static void motorsControl::FlagDetect()
+{
+  counter++;
+}
+
+static void motorsControl::IntRefresh()
+{
+  Refresh = true;
+}
+
+void motorsControl::begin(uint8_t nMotors,int TimeBasems)
+{
+  this->nMotors = nMotors;
+  this->TimeBasems = TimeBasems;
+  motor = new motorControl[nMotors](TimeBasems);
+
+}
+
+void motorsControl::defineInt()
+{
+  for(int i = 0; i < nMotors;i++)
+    attachInterrupt(motor[i].getIntPin(), FlagDetect, RISING);
+        
+  Timer1.initialize(1000*TimeBasems);
+  Timer1.attachInterrupt(IntRefresh);
+}
+
+
+void setup() {
+
+  Serial.begin(250000);
+
+  //digitalWrite(7,HIGH);
+  //digitalWrite(6,HIGH);
+  digitalWrite(5,LOW);
+  
+}
+
+void loop() {
+
+if(Refresh)
+{
+  
+  /* loop
+  encoderRead();
+  joystickRead();
+  encoder_to_W();
+  joystick_to_W();
+  pidAdapter();
+  runpid();
+  writeMotor();
+  */ 
+
+}
+  
+}
