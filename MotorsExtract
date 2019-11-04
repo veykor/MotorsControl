@@ -1,0 +1,165 @@
+#include <TimerOne.h>
+
+#define IntPin 2
+
+#define constTimeMicroseconds 10000
+
+#define RADFORPULSEANDSECOND 0.00461998919*(1000000/constTimeMicroseconds)
+
+long int counter = 0;
+
+double wmotor = 0;
+
+//const int motorconst = MILIRADFORPULSEANDSECOND;
+
+
+int constNTimesPerSeconds = 1000000/constTimeMicroseconds;
+
+long int tiempo = 0;
+
+bool unavez[] = {false,false,false,false,false,false};
+int val = 0;
+bool mostrar = false;
+bool refresco = false;
+
+void flagdetect()
+{
+  counter++;
+}
+
+void W()
+{
+  tiempo++;
+  refresco = true;
+}
+
+
+
+
+class motor
+{
+  public:
+    motor(int pinTurnClock, int pinTurnAnticlock,int pinEnable);
+
+    void setVelocity(int vel); 
+
+  private:
+  int pTC,pTAc,pE;
+  void definePin();
+  int sat(int LimSup,int LimInf,int Value);
+};
+
+motor::motor(int pinTurnClock, int pinTurnAnticlock,int pinEnable)
+{
+  this->pTC = pinTurnClock;
+  this->pTAc = pinTurnAnticlock;
+  this->pE = pinEnable;
+  definePin();
+}
+
+void motor::definePin()
+{
+  pinMode(pTC,OUTPUT);
+  pinMode(pTAc,OUTPUT);
+  pinMode(pE,OUTPUT);
+}
+
+int motor::sat(int LimSup,int LimInf,int Value)
+{
+    int res = Value;
+    res = max(res,LimInf);
+    res = min(res,LimSup);
+    return res;
+}
+
+
+void motor::setVelocity(int vel)
+{
+
+  
+    
+}
+
+
+
+
+void setup() {
+
+  Serial.begin(250000);
+  pinMode(IntPin, INPUT_PULLUP);
+  
+  
+  pinMode(7,OUTPUT);
+  pinMode(6,OUTPUT);
+  pinMode(5,OUTPUT);
+  
+  attachInterrupt(digitalPinToInterrupt(IntPin), flagdetect, RISING);
+  Timer1.initialize(constTimeMicroseconds*1);
+  Timer1.attachInterrupt(W);
+
+  //digitalWrite(7,HIGH);
+  //digitalWrite(6,HIGH);
+  digitalWrite(5,LOW);
+  
+}
+
+void loop() {
+  /*
+    Serial.print("Vueltas: ");
+    Serial.print(counter/1360);
+    Serial.print(" - ");
+    Serial.print(counter%1360);
+    Serial.print(" - ");
+    Serial.println(counter);
+  */
+if(refresco)
+{
+
+  wmotor = (double)counter * RADFORPULSEANDSECOND;
+  counter = 0;
+  
+}
+
+if(refresco and mostrar)
+{
+  //Serial.print("W: ");  
+  Serial.println(wmotor,6);
+  refresco = false;
+}
+
+  if(!unavez[0] and (tiempo > constNTimesPerSeconds*2))
+  {
+    digitalWrite(7,HIGH);
+    analogWrite(6,127);
+    unavez[0] = true;
+    mostrar = true;
+  }
+
+  if(!unavez[1] and (tiempo > constNTimesPerSeconds*4))
+  {
+    digitalWrite(7,HIGH);
+    analogWrite(6,200);
+    unavez[1] = true;
+  }
+
+  if(!unavez[2] and (tiempo > constNTimesPerSeconds*6))
+  {
+    digitalWrite(7,LOW);
+    analogWrite(6,0);
+    unavez[2] = true;
+  }
+
+  if(tiempo > constNTimesPerSeconds*7)
+  {    
+    mostrar = false;
+  }
+
+  if(!unavez[3] and (tiempo > constNTimesPerSeconds*10))
+  {
+
+    
+  }
+  
+
+  
+}
