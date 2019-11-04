@@ -16,16 +16,23 @@
 long int FlagCounter = 0;
 bool Refresh = false;
 
+long int TimeRefresh = 0;
+long int TimeInt[NMOTORS][2];
+bool IntActived = false;
 
 void IntRefresh()
 {
+  TimeRefresh = micros();
   Refresh = true;
 }
 
 
 void FlagDetect()
 {
+  TimeInt[0][1]=TimeInt[0][0];
+  TimeInt[0][0]=micros();
   FlagCounter++;
+  IntActived = true;
 }
 
 ///////////////////////////////////////////////////////////////////Class Motor Unit//////////////////////////////////////////////////////////////////////////////
@@ -36,12 +43,14 @@ class motorControl
   
     void begin(int pinTurnClock, int pinTurnAnticlock,int pinEnable,long int *EncoderCounter,int EncoderTickPerTurn,double Kp,double Ki,double Kd);
     double ReadAngularVelocity(); 
+    double ReadAngularVelocity2(long int DTimeMicroseconds); 
     void WriteMotor(double ControlSignal);
     
 
   //private:
     int pTC,pTAc,pE;
     double RadPerPulseAndSecond;
+    double RadPerPulse;
     int TurningSense;
     int TimeBasems;
 
@@ -72,8 +81,9 @@ void motorControl::begin(int pinTurnClock, int pinTurnAnticlock,int pinEnable,lo
   this->pTC = pinTurnClock;
   this->pTAc = pinTurnAnticlock;
   this->pE = pinEnable;
- 
-  RadPerPulseAndSecond = ((2.0*PI)/(double)EncoderTickPerTurn)*(1000.0/(double)TimeBasems);
+  RadPerPulse = ((2.0*PI)/(double)EncoderTickPerTurn);
+  RadPerPulseAndSecond = RadPerPulse*(1000.0/(double)TimeBasems);
+  
 
   FlagCounter = EncoderCounter;
 
@@ -84,10 +94,23 @@ double motorControl::ReadAngularVelocity()
 {
 
   WMotor = (double)TurningSense*(double)FlagCounter[0] * RadPerPulseAndSecond;
+  //Serial.print(WMotor);
+  //Serial.print(" :--: ");
   FlagCounter[0] = 0;
   return WMotor;
 }
 
+double motorControl::ReadAngularVelocity2(long int DTimeMicroseconds)
+{
+  double WMotor2;
+  WMotor2 = ((double)TurningSense*RadPerPulse*1000000)/((double)DTimeMicroseconds);
+//  Serial.print(WMotor);
+//  Serial.print(" :--: ");
+//Serial.print(RadPerPulse,6);
+//  Serial.print(" :--: ");
+  
+  return WMotor2;
+}
 
 void motorControl::WriteMotor(double ControlSignal)
 {
@@ -230,7 +253,7 @@ struct
 
 motorsControl MotorsSystem;
 Joystick Controller(0,1,10000,10000);
-PID PidController(&PidStruct[0].Input,&PidStruct[0].Output,&PidStruct[0].SetPoint,10.0,50.0,0.0,DIRECT);
+PID PidController(&PidStruct[0].Input,&PidStruct[0].Output,&PidStruct[0].SetPoint,10,50,0.0,DIRECT);
 
 void setup() {
 
@@ -249,6 +272,8 @@ void setup() {
   Timer1.initialize(1000*TIMEBASEMS);
   Timer1.attachInterrupt(IntRefresh);
 
+  //digitalWrite(7,HIGH);
+  //digitalWrite(6,HIGH);
   digitalWrite(5,LOW);
   
 }
@@ -257,20 +282,92 @@ void loop() {
 
 if(Refresh)
 {
-
-  Controller.ValueRead();
-
   
+  
+  //Serial.print(MotorsSystem.motor[0].WMotor);
+  //Serial.print(" :--: ");
+  Controller.ValueRead();
+//  Serial.print(" : ");
+//  Serial.print(Controller.x);
+//  Serial.print(" : ");
+//  Serial.print(Controller.y);
+//  Serial.print(" : ");
+//  
+
+
+//  if(IntActived)
+//  {
+//    Serial.print(TimeInt[0][0]-TimeInt[0][1]);
+//    Serial.print(" : ");
+//    Serial.print(MotorsSystem.motor[0].ReadAngularVelocity2(TimeInt[0][0]-TimeInt[0][1]));
+//    PidStruct[0].Input = MotorsSystem.motor[0].ReadAngularVelocity2(TimeInt[0][0]-TimeInt[0][1]);
+//  }    
+//  else
+//  {
+//    Serial.print(TimeRefresh-TimeInt[0][0]);
+//    Serial.print(" : ");
+//    Serial.print(MotorsSystem.motor[0].ReadAngularVelocity2(TimeInt[0][0]-TimeInt[0][1]));
+//    PidStruct[0].Input = MotorsSystem.motor[0].ReadAngularVelocity2(TimeRefresh-TimeInt[0][0]);
+//  }
+    
+ // Serial.print(" : ");
   PidStruct[0].Input = MotorsSystem.motor[0].ReadAngularVelocity();
-
-  PidStruct[0].SetPoint = double(Controller.x)/2000.0;
-
+//  Serial.print(PidStruct[0].Input);
+//  Serial.print(" : ");
+  PidStruct[0].SetPoint = double(Controller.x)/1000.0;
+//  Serial.print(PidStruct[0].SetPoint);
+//  Serial.print(" : ");
   PidController.Compute();
 
   int temp = PidStruct[0].Output;
-  Serial.println(temp);
+  //Serial.print(temp);
   MotorsSystem.motor[0].WriteMotor(temp);
+  Serial.println("");
 
+
+//  Serial.print(constrain(200,0,255));
+//  Serial.print(" :--: ");
+//  Serial.println(-constrain((int)-200.0,-255,0));
+//  
+//  analogWrite(5,0);
+//  analogWrite(6,0);
+  /*
+  
+  
+  
+  */
+  
+  /*
+  Serial.print(Controller.xRaw);
+  Serial.print(" : ");
+  Serial.print(Controller.x);
+  Serial.print(" : ");
+  Serial.print(Controller.yRaw);
+  Serial.print(" : ");  
+  Serial.print(Controller.y);
+  Serial.print(" : ");
+  Serial.println(MotorsSystem.motor[0].FlagCounter[0]);
+  
+  */
+
+   /*
+    double SetPointPid;
+    double FeedbackPid;
+    double OutputPid;
+    long int *FlagCounter;
+*/
+
+  
+  /* loop
+  encoderRead();
+  joystickRead();
+  encoder_to_W();
+  joystick_to_W();
+  pidAdapter();
+  runpid();
+  writeMotor();
+  */   
+  IntActived = false;
   Refresh = false;
 }
   
