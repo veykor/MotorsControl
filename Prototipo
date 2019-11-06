@@ -1,31 +1,26 @@
 #include <PID_v1.h>
-
-//#include <FastPID.h>
-
-
-
-
 #include <TimerOne.h>
 
 #define TIMEBASEMS 10
 #define INTPINMOTOR1  2
 #define NMOTORS 1
-#define BANGBANGFACTOR 0.5
+#define PINENABLEMOTOR1 7
+#define PINTURNCLOCKMOTOR1  5
+#define PINTURNANTICLOCKMOTOR1  6
 
 
 long int FlagCounter = 0;
 bool Refresh = false;
-
 long int TimeRefresh = 0;
 long int TimeInt[NMOTORS][2];
 bool IntActived = false;
 
+///////////////////Interrupts functions/////////////////////////
 void IntRefresh()
 {
   TimeRefresh = micros();
   Refresh = true;
 }
-
 
 void FlagDetect()
 {
@@ -39,12 +34,14 @@ void FlagDetect()
 class motorControl
 {
   public:
+    motorControl();
     motorControl(int timebase);
   
-    void begin(int pinTurnClock, int pinTurnAnticlock,int pinEnable,long int *EncoderCounter,int EncoderTickPerTurn,double Kp,double Ki,double Kd);
+    void begin(int pinTurnClock, int pinTurnAnticlock,int pinEnable,long int *EncoderCounter,int EncoderTickPerTurn);
     double ReadAngularVelocity(); 
     double ReadAngularVelocity2(long int DTimeMicroseconds); 
     void WriteMotor(double ControlSignal);
+    void setTimeBase(int TimeBase);
     
 
   //private:
@@ -66,6 +63,11 @@ motorControl::motorControl(int timebase)
   this->TimeBasems = timebase;
 }
 
+motorControl::motorControl()
+{
+  
+}
+
 
 void motorControl::definePin()
 {
@@ -75,16 +77,20 @@ void motorControl::definePin()
   digitalWrite(pE,HIGH);
 }
 
+void motorControl::setTimeBase(int TimeBase)
+{
+  this->TimeBasems = TimeBase;
+}
 
-void motorControl::begin(int pinTurnClock, int pinTurnAnticlock,int pinEnable,long int *EncoderCounter,int EncoderTickPerTurn,double Kp,double Ki,double Kd)
+void motorControl::begin(int pinTurnClock, int pinTurnAnticlock,int pinEnable,long int *EncoderCounter,int EncoderTickPerTurn)
 {
   this->pTC = pinTurnClock;
   this->pTAc = pinTurnAnticlock;
   this->pE = pinEnable;
+  
   RadPerPulse = ((2.0*PI)/(double)EncoderTickPerTurn);
   RadPerPulseAndSecond = RadPerPulse*(1000.0/(double)TimeBasems);
   
-
   FlagCounter = EncoderCounter;
 
   definePin();
@@ -92,23 +98,15 @@ void motorControl::begin(int pinTurnClock, int pinTurnAnticlock,int pinEnable,lo
 
 double motorControl::ReadAngularVelocity()
 {
-
   WMotor = (double)TurningSense*(double)FlagCounter[0] * RadPerPulseAndSecond;
-  //Serial.print(WMotor);
-  //Serial.print(" :--: ");
   FlagCounter[0] = 0;
   return WMotor;
 }
 
-double motorControl::ReadAngularVelocity2(long int DTimeMicroseconds)
+double motorControl::ReadAngularVelocity2(long int DTimeMicroseconds) //testing step
 {
   double WMotor2;
   WMotor2 = ((double)TurningSense*RadPerPulse*1000000)/((double)DTimeMicroseconds);
-//  Serial.print(WMotor);
-//  Serial.print(" :--: ");
-//Serial.print(RadPerPulse,6);
-//  Serial.print(" :--: ");
-  
   return WMotor2;
 }
 
@@ -116,13 +114,8 @@ void motorControl::WriteMotor(double ControlSignal)
 {
   int WtempTC = constrain((int)ControlSignal,0,254);
   int WtempTAc = -constrain((int)ControlSignal,-254,0);
-  /*Serial.print(pTC);
-  Serial.print(" : ");
-  Serial.print(WtempTC);
-  Serial.print(" : ");
-  Serial.print(pTAc);
-  Serial.print(" : ");
-  Serial.println(WtempTAc);*/
+ 
+  //turning sense tester
   if(WtempTC > 20 && WtempTAc == 0)
     TurningSense = 1;
   else if(WtempTC == 0 && WtempTAc > 20)
@@ -133,8 +126,7 @@ void motorControl::WriteMotor(double ControlSignal)
     analogWrite(pTAc,0);
     return;
   }
-    
-  
+     
   analogWrite(pTC,WtempTC);
   analogWrite(pTAc,WtempTAc);
   
@@ -149,33 +141,32 @@ class motorsControl
   void begin(uint8_t nMotors,int TimeBasems);
   private:
   uint8_t nMotors;
-  int TimeBasems;
-  
+  int TimeBasems;  
 };
-
 
 void motorsControl::begin(uint8_t nMotors,int TimeBasems)
 {
   this->nMotors = nMotors;
   this->TimeBasems = TimeBasems;
-  this->motor = new motorControl[nMotors](TimeBasems);
-
+  this->motor = new motorControl[nMotors];
+  for(int i = 0;i < nMotors;i++)
+    motor[i].setTimeBase(TimeBasems);
+  
 }
-
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////Class Joystick//////////////////////////////////////////////////////////////////////////////////
 class Joystick
 {
   public:
-  int x,y,xRaw,yRaw,xInPin,yInPin,xCenterPoint,yCenterPoint;
+  int x,y,xRaw,yRaw;
+  int xInPin,yInPin;
+  int xCenterPoint,yCenterPoint;
   int LimxMin,LimxMax,LimyMin,LimyMax;
   int OutxValue,OutyValue;
   
-  
-  Joystick(int xAnPin,int yAnPin,int OutxMaxValue,int OutyMaxValue);
-  //Joystick(int xAnPin,int yAnPin,int xRawMin,int xRawMax,int yRawMin,int yRawMax);
+  //Joystick(int xAnPin,int yAnPin,int OutxMaxValue,int OutyMaxValue);
+  Joystick(int xAnPin,int yAnPin,int xRawMin,int xRawMax,int yRawMin,int yRawMax,int OutxMaxValue,int OutyMaxValue);
   void ValueRead();
   void TestLimits();
   void Adapter();
@@ -187,12 +178,16 @@ class Joystick
   
 };
 
-Joystick::Joystick(int xAnPin,int yAnPin,int OutxMaxValue,int OutyMaxValue)
+Joystick::Joystick(int xAnPin,int yAnPin,int xRawMin,int xRawMax,int yRawMin,int yRawMax,int OutxMaxValue,int OutyMaxValue)
 {
   this->xInPin = xAnPin;
   this->yInPin = yAnPin;
   this->OutxValue = OutxMaxValue;
   this->OutyValue = OutyMaxValue;
+  LimxMax = (((xRawMax-xRawMin)/2)*0.9);
+  LimxMin = -(((xRawMax-xRawMin)/2)*0.9);
+  LimyMax = (((yRawMax-yRawMin)/2)*0.9);
+  LimyMin = -(((yRawMax-yRawMin)/2)*0.9);
 }
 
 void Joystick::ValueRead()
@@ -206,11 +201,7 @@ void Joystick::ValueRead()
 void Joystick::setCenter()
 {
   xCenterPoint = analogRead(xInPin);
-  yCenterPoint = analogRead(yInPin);
-  LimxMax = xCenterPoint+100;
-  LimxMin = xCenterPoint-100;
-  LimyMax = yCenterPoint+100;
-  LimyMin = yCenterPoint-100;
+  yCenterPoint = analogRead(yInPin);  
 }
 
 void Joystick::begin() 
@@ -239,6 +230,7 @@ void Joystick::Adapter()
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/////////////////////////////////////////Under builds//////////////////////////
 struct
 {
   double Input;
@@ -249,10 +241,10 @@ struct
   double Kd; 
   
 }PidStruct[NMOTORS];
-
+///////////////////////////////////////////////////////////////////////////////
 
 motorsControl MotorsSystem;
-Joystick Controller(0,1,10000,10000);
+Joystick Controller(0,1,0,1024,0,1024,10000,10000);
 PID PidController(&PidStruct[0].Input,&PidStruct[0].Output,&PidStruct[0].SetPoint,10,50,0.0,DIRECT);
 
 void setup() {
@@ -261,8 +253,8 @@ void setup() {
 
   ////////////////////////////////
   Controller.begin();
-  MotorsSystem.begin(NMOTORS,TIMEBASEMS);
-  MotorsSystem.motor[0].begin(5,6,7,&FlagCounter,1360,10,62.7352572145546,0);
+  MotorsSystem.begin(NMOTORS,TIMEBASEMS); 
+  MotorsSystem.motor[0].begin(PINTURNCLOCKMOTOR1,PINTURNANTICLOCKMOTOR1,PINENABLEMOTOR1,&FlagCounter,1360);
   PidController.SetMode(AUTOMATIC);
   PidController.SetOutputLimits(-255.0,255.0);
 
@@ -270,105 +262,21 @@ void setup() {
 
   attachInterrupt(digitalPinToInterrupt(INTPINMOTOR1), FlagDetect, RISING);
   Timer1.initialize(1000*TIMEBASEMS);
-  Timer1.attachInterrupt(IntRefresh);
-
-  //digitalWrite(7,HIGH);
-  //digitalWrite(6,HIGH);
-  digitalWrite(5,LOW);
-  
+  Timer1.attachInterrupt(IntRefresh);    
 }
 
 void loop() {
 
 if(Refresh)
 {
-  
-  
-  //Serial.print(MotorsSystem.motor[0].WMotor);
-  //Serial.print(" :--: ");
   Controller.ValueRead();
-//  Serial.print(" : ");
-//  Serial.print(Controller.x);
-//  Serial.print(" : ");
-//  Serial.print(Controller.y);
-//  Serial.print(" : ");
-//  
-
-
-//  if(IntActived)
-//  {
-//    Serial.print(TimeInt[0][0]-TimeInt[0][1]);
-//    Serial.print(" : ");
-//    Serial.print(MotorsSystem.motor[0].ReadAngularVelocity2(TimeInt[0][0]-TimeInt[0][1]));
-//    PidStruct[0].Input = MotorsSystem.motor[0].ReadAngularVelocity2(TimeInt[0][0]-TimeInt[0][1]);
-//  }    
-//  else
-//  {
-//    Serial.print(TimeRefresh-TimeInt[0][0]);
-//    Serial.print(" : ");
-//    Serial.print(MotorsSystem.motor[0].ReadAngularVelocity2(TimeInt[0][0]-TimeInt[0][1]));
-//    PidStruct[0].Input = MotorsSystem.motor[0].ReadAngularVelocity2(TimeRefresh-TimeInt[0][0]);
-//  }
-    
- // Serial.print(" : ");
   PidStruct[0].Input = MotorsSystem.motor[0].ReadAngularVelocity();
-//  Serial.print(PidStruct[0].Input);
-//  Serial.print(" : ");
   PidStruct[0].SetPoint = double(Controller.x)/1000.0;
-//  Serial.print(PidStruct[0].SetPoint);
-//  Serial.print(" : ");
   PidController.Compute();
-
   int temp = PidStruct[0].Output;
-  //Serial.print(temp);
   MotorsSystem.motor[0].WriteMotor(temp);
-  Serial.println("");
 
-
-//  Serial.print(constrain(200,0,255));
-//  Serial.print(" :--: ");
-//  Serial.println(-constrain((int)-200.0,-255,0));
-//  
-//  analogWrite(5,0);
-//  analogWrite(6,0);
-  /*
-  
-  
-  
-  */
-  
-  /*
-  Serial.print(Controller.xRaw);
-  Serial.print(" : ");
-  Serial.print(Controller.x);
-  Serial.print(" : ");
-  Serial.print(Controller.yRaw);
-  Serial.print(" : ");  
-  Serial.print(Controller.y);
-  Serial.print(" : ");
-  Serial.println(MotorsSystem.motor[0].FlagCounter[0]);
-  
-  */
-
-   /*
-    double SetPointPid;
-    double FeedbackPid;
-    double OutputPid;
-    long int *FlagCounter;
-*/
-
-  
-  /* loop
-  encoderRead();
-  joystickRead();
-  encoder_to_W();
-  joystick_to_W();
-  pidAdapter();
-  runpid();
-  writeMotor();
-  */   
   IntActived = false;
   Refresh = false;
-}
-  
+}  
 }
